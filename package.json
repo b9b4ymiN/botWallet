@@ -1,0 +1,25 @@
+{
+  "name": "wtrack",
+  "version": "1.0.0",
+  "description": "Solana DeFi activity tracker",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "watch": "tsc -w"
+  },
+  "dependencies": {
+    "@metaplex-foundation/mpl-token-metadata": "^2.9.0",
+    "@solana/web3.js": "^1.78.4",
+    "axios": "^1.5.0",
+    "discord.js": "^14.13.0",
+    "dotenv": "^16.3.1",
+    "winston": "^3.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.5.7",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
+  }
+}

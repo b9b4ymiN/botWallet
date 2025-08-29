@@ -3,3 +3,10 @@ dist
 .git
 *.log
 .env
+.env.*
+Dockerfile
+.dockerignore
+combined.log
+error.log
+**/.DS_Store
+**/Thumbs.db

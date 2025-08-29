@@ -1,5 +1,6 @@
 import { WebhookClient, EmbedBuilder, APIMessage } from "discord.js";
 import logger from "./logger";
+import { getDexScreener } from "../services/dexscreener";
 
 export interface WalletConfig {
   name: string;
@@ -18,8 +19,8 @@ export interface TokenInfo {
 export interface DefiActivity {
   txID: string;
   exchangeName: string;
-  tokenIn: TokenInfo;
-  tokenOut: TokenInfo;
+  tokenIn: TokenInfo; // received by wallet
+  tokenOut: TokenInfo; // spent by wallet
   qtyIn: number;
   qtyOut: number;
   timestamp: number;
@@ -35,77 +36,181 @@ export class DiscordNotifier {
     }).format(num);
   }
 
+  private static formatUsd(num?: number | string | null): string {
+    if (num === undefined || num === null || num === "") return "N/A";
+    const n = typeof num === "string" ? Number(num) : num;
+    if (!isFinite(n)) return "N/A";
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 6,
+    }).format(n);
+  }
+
+  private static formatUsdCompact(num?: number | string | null): string {
+    if (num === undefined || num === null || num === "") return "N/A";
+    const n = typeof num === "string" ? Number(num) : num;
+    if (!isFinite(n)) return "N/A";
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      notation: "compact",
+      maximumFractionDigits: 2,
+    }).format(n);
+  }
+
+  private static formatPct(num?: number | null): string {
+    if (num === undefined || num === null || !isFinite(num)) return "N/A";
+    return `${num.toFixed(2)}%`;
+  }
+
+  private static diffSince(ts?: number): string {
+    if (!ts) return "N/A";
+    const ms = ts > 1e12 ? ts : ts * 1000; // sec to ms if needed
+    const secs = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+    const d = Math.floor(secs / 86400);
+    const h = Math.floor((secs % 86400) / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h ago`;
+    if (h > 0) return `${h}h ${m}m ago`;
+    return `${m}m ago`;
+  }
+
   public static async sendNotification(
     wallet: WalletConfig,
     activity: DefiActivity
   ): Promise<void> {
     try {
-      const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+      const primaryWebhook = (wallet.discord_ch || "").trim();
+      const fallbackWebhook = (process.env.DISCORD_WEBHOOK_URL || "").trim();
+      const webhookUrl = primaryWebhook || fallbackWebhook;
       if (!webhookUrl) {
         throw new Error("Discord webhook URL not configured");
       }
 
       const webhookClient = new WebhookClient({ url: webhookUrl });
 
-      const strAddress = wallet.address.substr(0, 5);
+      const strAddress = wallet.address.substring(0, 5);
 
-      const inStr =
-        activity.tokenIn.symbol != "SOL"
-          ? `${this.formatNumber(activity.qtyIn)}[${
-              activity.tokenIn.symbol
-            }](https://dexscreener.com/solana/${activity.tokenIn.address})`
-          : `${this.formatNumber(activity.qtyIn)} ${activity.tokenIn.symbol}`;
-
-      const outStr =
-        activity.tokenOut.symbol != "SOL"
-          ? `${this.formatNumber(activity.qtyOut)}[${
-              activity.tokenOut.symbol
-            }](https://dexscreener.com/solana/${activity.tokenOut.address})`
-          : `${this.formatNumber(activity.qtyOut)} ${activity.tokenOut.symbol}`;
+      const inStr = `${this.formatNumber(activity.qtyIn)} ${
+        activity.tokenIn.symbol
+      }`;
+      const outStr = `${this.formatNumber(activity.qtyOut)} ${
+        activity.tokenOut.symbol
+      }`;
 
       const dexLink = `https://solscan.io/tx/${activity.txID}`;
 
-      const message = `
-🏛️ Exchange: ${activity.exchangeName}
-💱 Transaction: [View on Solscan](${dexLink})
-👛 Wallet: [${strAddress}](https://solscan.io/account/${wallet.address})
-      `;
+      // Determine traded token (prefer non-SOL/non-stablecoin)
+      const STABLES = new Set(["USDC", "USDT"]);
+      const tradedToken =
+        activity.tokenIn.symbol === "SOL" ||
+        STABLES.has(activity.tokenIn.symbol)
+          ? activity.tokenOut
+          : activity.tokenIn;
 
+      // Fetch DexScreener data for traded token
+      const pair =
+        tradedToken && tradedToken.address
+          ? await getDexScreener(tradedToken.address)
+          : null;
+
+      // Build message like the requested format
+      const addressCheck = tradedToken?.address ?? "";
+      const dexPairUrl =
+        pair?.url ||
+        (addressCheck ? `https://dexscreener.com/solana/${addressCheck}` : "");
+      const icon_token = addressCheck
+        ? `https://dd.dexscreener.com/ds-data/tokens/solana/${addressCheck}.png?size=lg&key=a192eb`
+        : wallet.twProfile_img;
+
+      let spMessage = "";
+      if (pair) {
+        spMessage =
+          `🪙 Token :  ${
+            pair.baseToken?.symbol ?? tradedToken?.symbol ?? "N/A"
+          } \n` +
+          `💎 Mkt.cap : ${DiscordNotifier.formatUsdCompact(pair.fdv)} \n` +
+          `💰 Price ≈  ${DiscordNotifier.formatUsd(pair.priceUsd)} \n` +
+          `📊 Price chg : ${DiscordNotifier.formatPct(
+            pair.priceChange?.h24
+          )} \n` +
+          `🏛️ Exchange :  ${activity.exchangeName} \n` +
+          `💦 Pair : ${DiscordNotifier.diffSince(pair.pairCreatedAt)} `;
+      }
+
+      const chartLine = dexPairUrl
+        ? `Chart : [dexscreener](${dexPairUrl}) \n`
+        : "";
+      const pumpLine = addressCheck
+        ? `Pump : [pump.fun](https://pump.fun/${addressCheck})`
+        : "";
+      const walletLine = `\nWallet : [${strAddress}](https://gmgn.ai/sol/address/${wallet.address})\n`;
+      const txnLine = `Txn : [solscan](https://solscan.io/tx/${activity.txID}) \n`;
+      const message =
+        `${spMessage}\n\n${chartLine}${pumpLine}${walletLine}${txnLine}`.trim();
+
+      const handle = (wallet.x || "").replace(/^@/, "");
       const embedMessage = new EmbedBuilder()
         .setTitle(activity.mode)
         .setDescription(message)
-        .setURL(dexLink)
-        .setColor(activity.mode === "BUY" ? 0x7eba3c : 0xd01f3c)
+        .setURL(dexPairUrl || dexLink)
+        .setColor(activity.mode.includes("BUY") ? 8311585 : 13632027)
         .setTimestamp()
-        .setFooter({ text: "Solana DeFi Activity" })
+        .setFooter({ text: "Time" })
+        .setThumbnail(icon_token)
         .setAuthor({
           name: wallet.name,
-          url: `https://x.com/${wallet.x}`,
+          url: `https://x.com/${handle}`,
           iconURL: wallet.twProfile_img,
         })
         .setFields([
           {
             name: "Input",
-            value: inStr,
+            value:
+              activity.tokenOut.symbol === "SOL"
+                ? outStr
+                : `[${outStr}](https://dexscreener.com/solana/${activity.tokenOut.address}?maker=${wallet.address})`,
             inline: true,
           },
           {
             name: "Output",
-            value: outStr,
+            value:
+              activity.tokenIn.symbol === "SOL"
+                ? inStr
+                : `[${inStr}](https://dexscreener.com/solana/${activity.tokenIn.address}?maker=${wallet.address})`,
             inline: true,
           },
         ]);
 
-      await webhookClient.send({
+      const payload = {
         username: wallet.name,
         avatarURL: wallet.twProfile_img,
         embeds: [embedMessage],
-      });
+      } as const;
 
-      logger.info("Discord notification sent successfully", {
-        wallet: wallet.address,
-        txId: activity.txID,
-      });
+      try {
+        await webhookClient.send(payload);
+      } catch (err: any) {
+        const code = err?.code ?? err?.rawError?.code;
+        const isUnknownWebhook = Number(code) === 10015;
+        const canRetry =
+          isUnknownWebhook &&
+          primaryWebhook &&
+          fallbackWebhook &&
+          primaryWebhook !== fallbackWebhook;
+        if (canRetry) {
+          const retryClient = new WebhookClient({ url: fallbackWebhook });
+          await retryClient.send(payload);
+          logger.warn(
+            "Primary webhook invalid (10015). Sent via fallback webhook."
+          );
+        } else {
+          throw err;
+        }
+      }
+
+      logger.info("Discord notification sent successfully");
     } catch (error) {
       logger.error("Error sending Discord notification:", error);
     }

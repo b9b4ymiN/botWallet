@@ -1,4 +1,4 @@
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection, MessageAccountKeys, PublicKey } from "@solana/web3.js";
 import { PROGRAM_ACCOUNTS_DEX } from "../constants";
 import logger from "../utils/logger";
 import * as dotenv from "dotenv";
@@ -11,6 +11,8 @@ import {
   TokenInfo,
 } from "../utils/discord";
 import { TokenService } from "./TokenService";
+import { getAllDexProgramsSet, getDexName } from "./dexRegistry";
+import { analyzeTrade, determineMode } from "./tradeAnalyzer";
 
 dotenv.config();
 
@@ -33,7 +35,7 @@ export class WalletTracker {
       }
 
       this.connection = new Connection(rpcUrl);
-      this.dexPrograms = new Set(Object.values(PROGRAM_ACCOUNTS_DEX).flat());
+      this.dexPrograms = getAllDexProgramsSet();
       this.wallets = new Map();
       this.knownSignatures = new Set();
 
@@ -69,91 +71,9 @@ export class WalletTracker {
     }
   }
 
-  private async getDexName(programId: string): Promise<string> {
-    for (const [dex, addresses] of Object.entries(PROGRAM_ACCOUNTS_DEX)) {
-      if (addresses.includes(programId)) {
-        return dex;
-      }
-    }
-    return "Unknown DEX";
-  }
+  // getDexName moved to dexRegistry.ts
 
-  private async getTradeInformation(
-    meta: any,
-    walletAddress: string,
-    accountKeys: any
-  ): Promise<{
-    tokenIn: TokenInfo | undefined;
-    tokenOut: TokenInfo | undefined;
-    qtyIn: number;
-    qtyOut: number;
-  }> {
-    const { preTokenBalances, postTokenBalances, preBalances, postBalances } =
-      meta;
-    let tokenIn: TokenInfo | undefined;
-    let tokenOut: TokenInfo | undefined;
-    let qtyIn = 0;
-    let qtyOut = 0;
-
-    // SOL balance change
-    const walletIndex = accountKeys
-      .keySegments()
-      .flat()
-      .findIndex((key: any) => key.toString() === walletAddress);
-    if (walletIndex !== -1) {
-      const preSolBalance = preBalances[walletIndex] || 0;
-      const postSolBalance = postBalances[walletIndex] || 0;
-      const solChange = (postSolBalance - preSolBalance) / 1e9; // Lamports to SOL
-
-      if (solChange > 0) {
-        tokenIn = { symbol: "SOL", address: "Solana" };
-        qtyIn = solChange;
-      } else if (solChange < 0) {
-        tokenOut = { symbol: "SOL", address: "Solana" };
-        qtyOut = -solChange;
-      }
-    }
-
-    // Token balance changes
-    if (preTokenBalances && postTokenBalances) {
-      const balanceChanges = new Map<string, { pre: number; post: number }>();
-
-      preTokenBalances
-        .filter((b: any) => b.owner === walletAddress)
-        .forEach((b: any) => {
-          balanceChanges.set(b.mint, {
-            pre: b.uiTokenAmount.uiAmount || 0,
-            post: 0,
-          });
-        });
-
-      postTokenBalances
-        .filter((b: any) => b.owner === walletAddress)
-        .forEach((b: any) => {
-          const existing = balanceChanges.get(b.mint) || { pre: 0, post: 0 };
-          balanceChanges.set(b.mint, {
-            ...existing,
-            post: b.uiTokenAmount.uiAmount || 0,
-          });
-        });
-
-      for (const [mint, { pre, post }] of balanceChanges.entries()) {
-        if (post > pre) {
-          if (!tokenIn) {
-            tokenIn = await this.tokenService.getTokenInfo(mint);
-            qtyIn = post - pre;
-          }
-        } else if (pre > post) {
-          if (!tokenOut) {
-            tokenOut = await this.tokenService.getTokenInfo(mint);
-            qtyOut = pre - post;
-          }
-        }
-      }
-    }
-
-    return { tokenIn, tokenOut, qtyIn, qtyOut };
-  }
+  // trade analysis moved to tradeAnalyzer.ts
 
   async processTransaction(
     signature: string,
@@ -174,13 +94,12 @@ export class WalletTracker {
         return;
       }
 
-      logger.info(
-        `Processing transaction ${signature} for wallet ${wallet.name}`
-      );
       // Use getAccountKeys() instead of accessing accountKeys directly
       const message = tx.transaction.message;
-      const programIds = message
-        .getAccountKeys()
+      const accountKeys = message.getAccountKeys({
+        accountKeysFromLookups: tx.meta?.loadedAddresses,
+      });
+      const programIds = accountKeys
         .keySegments()
         .flat()
         .map((key) => key.toString());
@@ -200,19 +119,25 @@ export class WalletTracker {
       );
 
       if (involvedDexPrograms.length > 0) {
-        const dexName = await this.getDexName(involvedDexPrograms[0]);
+        const firstProgram = involvedDexPrograms[0];
+        const dexName = getDexName(firstProgram);
+        if (dexName === "Unknown DEX") {
+          logger.warn(`Unknown DEX program detected`, {
+            programId: firstProgram,
+          });
+        }
 
         const meta = tx.meta;
         if (!meta) {
           return;
         }
 
-        const { tokenIn, tokenOut, qtyIn, qtyOut } =
-          await this.getTradeInformation(
-            meta,
-            wallet.address,
-            message.getAccountKeys()
-          );
+        const { tokenIn, tokenOut, qtyIn, qtyOut } = await analyzeTrade(
+          meta,
+          wallet.address,
+          accountKeys,
+          this.tokenService
+        );
 
         if (!tokenIn || !tokenOut || qtyIn === 0 || qtyOut === 0) {
           logger.info(
@@ -221,15 +146,7 @@ export class WalletTracker {
           return;
         }
 
-        const stablecoins = ["USDC", "USDT"];
-        let mode: "BUY" | "SELL" | "SWAP" = "SWAP";
-        if (tokenIn.symbol && stablecoins.includes(tokenIn.symbol)) {
-          mode = "SELL";
-        } else if (tokenOut.symbol === "SOL") {
-          mode = "BUY";
-        } else if (tokenIn.symbol === "SOL") {
-          mode = "SELL";
-        }
+        const mode = determineMode(tokenIn, tokenOut);
 
         // Identify tokens that changed for the wallet
         // This is a simplified example - in a real application, you'd need to decode
@@ -275,7 +192,6 @@ export class WalletTracker {
               const wallet = this.wallets.get(address);
 
               if (wallet && !this.knownSignatures.has(logs.signature)) {
-                console.log(logs);
                 logger.info(
                   `New activity detected for wallet: ${wallet.name} , signature: ${logs.signature}`
                 );

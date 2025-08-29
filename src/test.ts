@@ -2,9 +2,9 @@ import { processTransaction, WalletTracker } from "./services/walletTracker";
 import { WalletConfig } from "./utils/discord";
 
 const wallet: WalletConfig = {
-  name: "D4U7B",
-  x: "@runitbackghost",
-  address: "3Z19SwGej4xwKh9eiHyx3eVWHjBDEgGHeqrKtmhNcxsv",
+  name: "fascist.eth",
+  x: "@squirt.sol",
+  address: "5CoxdsuoRHDwDPVYqPoeiJxWZ588jXhpimCRJUj8FUN1",
   twProfile_img:
     "https://pbs.twimg.com/profile_images/1907294815081078784/KfZfapna_400x400.jpg",
   discord_ch:
@@ -14,7 +14,7 @@ const runTest = async () => {
   const walletTracker = new WalletTracker();
   console.log("Test function executed successfully.");
   processTransaction(
-    "2XEkpGZkhTW5RbSxN4oAABg3Pwx6f2JQAExiwe3aFRzUYsSGzyzSASBmotqSxMkoeGdwqSg17hv28Rc3jWBqFp48",
+    "5CtJeohRukX8GP4bLok3DZTHHHSeZorf76GzB25YfPnheFh7N1THNU3aJaqe14ciZzXP2rfmwvnspD1UD3ydnji9",
     wallet
   );
 };

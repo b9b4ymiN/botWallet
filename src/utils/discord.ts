@@ -7,7 +7,6 @@ export interface WalletConfig {
   address: string;
   x: string;
   twProfile_img: string;
-  discord_ch: string;
 }
 
 export interface TokenInfo {
@@ -81,7 +80,7 @@ export class DiscordNotifier {
     activity: DefiActivity
   ): Promise<void> {
     try {
-      const primaryWebhook = (wallet.discord_ch || "").trim();
+      const primaryWebhook = process.env.DISCORD_WEBHOOK_URL;
       const fallbackWebhook = (process.env.DISCORD_WEBHOOK_URL || "").trim();
       const webhookUrl = primaryWebhook || fallbackWebhook;
       if (!webhookUrl) {

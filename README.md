@@ -122,3 +122,10 @@ FAQ
 - 10015 Unknown Webhook: Verify webhook URLs in `wallet.json` or `DISCORD_WEBHOOK_URL` are valid; the code retries with the fallback webhook.
 - No DexScreener data: The message still sends without market summary and uses the profile image as a thumbnail.
 - RPC rate limits: If using a free Helius plan, consider upgrading when tracking many wallets or heavy tx activity.
+
+Updating after code changes 
+  1. git pull
+  2. docker build -t wtrack:latest .
+  3. docker rm -f wtrack
+  4. docker run -d --name wtrack --env-file .env -v $(pwd)/wallet.json:/app/wallet.json:ro --restart unless-stopped wtrack:latest
+  5. docker logs -f wtrack

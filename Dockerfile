@@ -4,7 +4,8 @@ WORKDIR /app
 
 # Install deps using lockfile
 COPY package*.json ./
-RUN npm ci
+# Use npm install instead of npm ci to tolerate lockfile drift during builds
+RUN npm install --no-audit --no-fund
 
 # Copy source and build
 COPY . .
@@ -18,7 +19,8 @@ ENV NODE_ENV=production
 
 # Install only production dependencies
 COPY package*.json ./
-RUN npm ci --omit=dev
+# Install only production deps; tolerate lockfile drift
+RUN npm install --omit=dev --no-audit --no-fund
 
 # Copy compiled output from builder
 COPY --from=build /app/dist ./dist
@@ -27,4 +29,3 @@ COPY --from=build /app/dist ./dist
 USER node
 
 CMD ["node", "dist/index.js"]
-

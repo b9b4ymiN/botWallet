@@ -1,20 +1,24 @@
-import { processTransaction, WalletTracker } from "./services/walletTracker";
+import { PnlBackfillService } from "./services/pnlBackfill";
 import { WalletConfig } from "./utils/discord";
 
 const wallet: WalletConfig = {
-  name: "fascist.eth",
+  name: "pow🧲",
   x: "@squirt.sol",
-  address: "5CoxdsuoRHDwDPVYqPoeiJxWZ588jXhpimCRJUj8FUN1",
+  address: "8zFZHuSRuDpuAR7J6FzwyF3vKNx4CVW3DFHJerQhc7Zd",
   twProfile_img:
-    "https://pbs.twimg.com/profile_images/1907294815081078784/KfZfapna_400x400.jpg",
+    "https://cdn.kolscan.io/profiles/8zFZHuSRuDpuAR7J6FzwyF3vKNx4CVW3DFHJerQhc7Zd.png",
 };
 const runTest = async () => {
-  const walletTracker = new WalletTracker();
-  console.log("Test function executed successfully.");
-  processTransaction(
-    "5CtJeohRukX8GP4bLok3DZTHHHSeZorf76GzB25YfPnheFh7N1THNU3aJaqe14ciZzXP2rfmwvnspD1UD3ydnji9",
-    wallet
-  );
+  // Backfill PnL for a specific token using token account history
+  const backfill = new PnlBackfillService();
+  const mint = "DHJVYXsikcimtcVo49FAZqYd1XPYPaXezYhbKArJbonk";
+
+  const taList = await backfill.listTokenAccounts(wallet.address, mint);
+  console.log("Token accounts for mint:", mint, taList);
+
+  // Reconstruct PnL and write to Firebase (uses Admin SDK)
+  await backfill.reconstructForToken(wallet.address, mint, { maxTx: 50 });
+  console.log("Backfill completed for:", wallet.address, mint);
 };
 
 console.log("Starting test...");

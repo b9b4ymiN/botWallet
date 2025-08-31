@@ -13,6 +13,9 @@ import {
 import { TokenService } from "./TokenService";
 import { getAllDexProgramsSet, getDexName } from "./dexRegistry";
 import { analyzeTrade, determineMode } from "./tradeAnalyzer";
+import { getDexScreener } from "./dexscreener";
+import { PortfolioService } from "./portfolio";
+import { PriceService } from "./priceService";
 
 dotenv.config();
 
@@ -26,6 +29,8 @@ export class WalletTracker {
   private wallets: Map<string, WalletConfig>;
   private knownSignatures: Set<string>;
   private tokenService: TokenService;
+  private portfolio: PortfolioService;
+  private priceService: PriceService;
 
   constructor() {
     try {
@@ -40,6 +45,8 @@ export class WalletTracker {
       this.knownSignatures = new Set();
 
       this.tokenService = new TokenService(this.connection);
+      this.portfolio = new PortfolioService(this.connection);
+      this.priceService = new PriceService();
 
       // Load wallet configurations
       this.loadWalletConfigs();
@@ -162,6 +169,104 @@ export class WalletTracker {
           mode, // Would need transaction parsing to determine if buy or sell
           wallet_address: wallet.address,
         };
+
+        // Optionally enrich with holdings and PnL before notifying
+        try {
+          const ENABLE_HOLDINGS = String(process.env.WTRACK_ENRICH_HOLDINGS || "true").toLowerCase() === "true";
+          const ENABLE_PNL = String(process.env.WTRACK_ENRICH_PNL || "true").toLowerCase() === "true";
+
+          if (!ENABLE_HOLDINGS && !ENABLE_PNL) {
+            // Skip enrichment entirely
+            await DiscordNotifier.sendNotification(wallet, activity);
+            return;
+          }
+
+          const STABLES = new Set(["USDC", "USDT"]);
+          const tradedToken =
+            activity.tokenIn.symbol === "SOL" || STABLES.has(activity.tokenIn.symbol)
+              ? activity.tokenOut
+              : activity.tokenIn;
+
+          if (tradedToken && tradedToken.address) {
+            const pair = await getDexScreener(tradedToken.address);
+            const priceUsd = pair?.priceUsd ? Number(pair.priceUsd) : undefined;
+
+            // Compute per-trade entry/exit price in USD using cash legs when available
+            let tradePriceUsd: number | undefined = undefined;
+            const stable = (s?: string) => !!s && STABLES.has(s);
+            const isSOL = (s?: string) => s === "SOL";
+            const needSolPrice = async (): Promise<number | undefined> => {
+              return await this.priceService.getSolUsd();
+            };
+
+            if (mode === "BUY") {
+              // Spent cash (tokenOut) to acquire traded token (tokenIn)
+              if (stable(activity.tokenOut.symbol)) {
+                if (activity.qtyIn > 0) tradePriceUsd = activity.qtyOut / activity.qtyIn;
+              } else if (isSOL(activity.tokenOut.symbol)) {
+                const solUsd = await needSolPrice();
+                if (solUsd && activity.qtyIn > 0)
+                  tradePriceUsd = (activity.qtyOut * solUsd) / activity.qtyIn;
+              }
+            } else if (mode === "SELL") {
+              // Received cash (tokenIn) by selling traded token (tokenOut)
+              if (stable(activity.tokenIn.symbol)) {
+                if (activity.qtyOut > 0) tradePriceUsd = activity.qtyIn / activity.qtyOut;
+              } else if (isSOL(activity.tokenIn.symbol)) {
+                const solUsd = await needSolPrice();
+                if (solUsd && activity.qtyOut > 0)
+                  tradePriceUsd = (activity.qtyIn * solUsd) / activity.qtyOut;
+              }
+            }
+
+            // Determine token amount for portfolio update based on trade side
+            const side = mode;
+            let tokenAmount = 0;
+            if (tradedToken.address === activity.tokenIn.address) tokenAmount = activity.qtyIn;
+            if (tradedToken.address === activity.tokenOut.address) tokenAmount = activity.qtyOut;
+
+            // Current holdings on-chain
+            const holdingQty = ENABLE_HOLDINGS
+              ? await this.portfolio.getHoldingQty(
+                  wallet.address,
+                  tradedToken.address,
+                  tradedToken.symbol
+                )
+              : 0;
+
+            // Update local position estimates for BUY/SELL (skip SWAP to avoid ambiguity)
+            if (ENABLE_PNL && (side === "BUY" || side === "SELL")) {
+              await this.portfolio.updateWithTrade({
+                walletAddress: wallet.address,
+                tokenAddress: tradedToken.address,
+                symbol: tradedToken.symbol,
+                tradeSide: side,
+                tokenAmount,
+                refPriceUsd: tradePriceUsd ?? priceUsd,
+              });
+            }
+
+            const pos = ENABLE_PNL
+              ? await this.portfolio.getPosition(
+                  wallet.address,
+                  tradedToken.address,
+                  tradedToken.symbol
+                )
+              : undefined;
+            const snapshot = this.portfolio.computeSnapshot(pos, holdingQty, priceUsd);
+
+            // Attach to activity (optional fields supported by notifier)
+            if (ENABLE_HOLDINGS) (activity as any).holdingQty = snapshot.holdingQty;
+            if (ENABLE_HOLDINGS) (activity as any).holdingValueUsd = snapshot.holdingValueUsd;
+            if (ENABLE_PNL) (activity as any).avgEntryUsd = snapshot.avgEntryUsd;
+            if (ENABLE_PNL) (activity as any).unrealizedPnlUsd = snapshot.unrealizedPnlUsd;
+            if (ENABLE_PNL) (activity as any).unrealizedPnlPct = snapshot.unrealizedPnlPct;
+            if (ENABLE_PNL) (activity as any).realizedPnlUsd = snapshot.realizedPnlUsd;
+            if (ENABLE_PNL || ENABLE_HOLDINGS) (activity as any).currentPriceUsd = priceUsd;
+          }
+        } catch (e) {
+          logger.warn("Failed to enrich activity with holdings/PNL", e);
+        }
 
         // Send Discord notification
         await DiscordNotifier.sendNotification(wallet, activity);

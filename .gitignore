@@ -5,3 +5,6 @@ dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+# Firebase service account keys (DO NOT COMMIT)
+serviceAccountKey.json
+*.firebase-adminsdk-*.json

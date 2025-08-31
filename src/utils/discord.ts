@@ -25,9 +25,23 @@ export interface DefiActivity {
   timestamp: number;
   mode: "BUY" | "SELL" | "SWAP";
   wallet_address: string;
+  // Optional enrichments
+  holdingQty?: number;
+  holdingValueUsd?: number;
+  avgEntryUsd?: number;
+  unrealizedPnlUsd?: number;
+  unrealizedPnlPct?: number;
+  realizedPnlUsd?: number;
+  currentPriceUsd?: number;
 }
 
 export class DiscordNotifier {
+  private static signEmoji(n?: number): string {
+    if (n === undefined || !isFinite(n)) return "";
+    if (n > 0) return "📈";
+    if (n < 0) return "📉";
+    return "➖";
+  }
   private static formatNumber(num: number): string {
     return new Intl.NumberFormat("en-US", {
       minimumFractionDigits: 2,
@@ -123,6 +137,18 @@ export class DiscordNotifier {
         ? `https://dd.dexscreener.com/ds-data/tokens/solana/${addressCheck}.png?size=lg&key=a192eb`
         : wallet.twProfile_img;
 
+      // Pretty header lines with emojis (used instead of legacy spMessage in final output)
+      const infoHeader = pair
+        ? [
+            `🪙 Token: ${pair.baseToken?.symbol ?? tradedToken?.symbol ?? "N/A"}`,
+            `💰 Mkt Cap: ${DiscordNotifier.formatUsdCompact(pair.fdv)}`,
+            `💵 Price: ${DiscordNotifier.formatUsd(pair.priceUsd)}`,
+            `📈 24h: ${DiscordNotifier.formatPct(pair.priceChange?.h24)}`,
+            `🏦 Exchange: ${activity.exchangeName}`,
+            `🕒 Pair age: ${DiscordNotifier.diffSince(pair.pairCreatedAt)}`,
+          ].join("\n")
+        : "";
+
       let spMessage = "";
       if (pair) {
         spMessage =
@@ -139,15 +165,58 @@ export class DiscordNotifier {
       }
 
       const chartLine = dexPairUrl
-        ? `Chart : [dexscreener](${dexPairUrl}) \n`
+        ? `🔗 Chart: [DexScreener](${dexPairUrl}) \n`
         : "";
       const pumpLine = addressCheck
-        ? `Pump : [pump.fun](https://pump.fun/${addressCheck})`
+        ? `🚀 Pump: [pump.fun](https://pump.fun/${addressCheck})`
         : "";
-      const walletLine = `\nWallet : [${strAddress}](https://gmgn.ai/sol/address/${wallet.address})\n`;
-      const txnLine = `Txn : [solscan](https://solscan.io/tx/${activity.txID}) \n`;
+      const walletLine = `\n👛 Wallet: [${strAddress}](https://gmgn.ai/sol/address/${wallet.address})\n`;
+      const txnLine = `🔎 Txn: [Solscan](https://solscan.io/tx/${activity.txID}) \n`;
+      // Holdings and PnL lines (optional)
+      const holdingsLine = (() => {
+        if (typeof activity.holdingQty === "number") {
+          const qtyStr = this.formatNumber(activity.holdingQty);
+          const valStr =
+            activity.holdingValueUsd !== undefined
+              ? this.formatUsd(activity.holdingValueUsd)
+              : "N/A";
+          const sym = tradedToken?.symbol ?? "";
+          return `📦 Holdings: ${qtyStr} ${sym} (${valStr})\n`;
+        }
+        return "";
+      })();
+
+      const pnlLines = (() => {
+        const uUsd = activity.unrealizedPnlUsd;
+        const uPct = activity.unrealizedPnlPct;
+        const rUsd = activity.realizedPnlUsd;
+        const lines: string[] = [];
+        if (uUsd !== undefined) {
+          const emo = this.signEmoji(uUsd);
+          const uStr = `${this.formatUsd(uUsd)}${
+            uPct !== undefined ? ` (${this.formatPct(uPct)})` : ""
+          }`;
+          lines.push(`📊 Unrealized PnL: ${emo} ${uStr}`);
+        }
+        if (rUsd !== undefined) {
+          const emo = this.signEmoji(rUsd);
+          const rStr = this.formatUsd(rUsd);
+          lines.push(`✅ Realized PnL: ${emo} ${rStr}`);
+        }
+        return lines.length ? lines.join("\n") + "\n" : "";
+      })();
+
+      const avgLine = (() => {
+        if (activity.avgEntryUsd !== undefined) {
+          const pStr = this.formatUsd(activity.currentPriceUsd);
+          const eStr = this.formatUsd(activity.avgEntryUsd);
+          return `💹 Current Price: ${pStr} \n 🎯 Avg Entry: ${eStr}\n`;
+        }
+        return "";
+      })();
+
       const message =
-        `${spMessage}\n\n${chartLine}${pumpLine}${walletLine}${txnLine}`.trim();
+        `${infoHeader}\n\n${holdingsLine}${pnlLines}${avgLine}\n${chartLine}${pumpLine}${walletLine}${txnLine}`.trim();
 
       const handle = (wallet.x || "").replace(/^@/, "");
       const embedMessage = new EmbedBuilder()

@@ -5,7 +5,7 @@
       "address": "215nhcAHjQQGgwpQSJQ7zR26etbjjtVdW74NLzwEgQjP",
       "enable": true,
       "name": "OGAntD",
-      "twProfile_img": "https://pbs.twimg.com/profile_images/1946020920369254401/m2KNRjuS_400x400.jpg",
+      "twProfile_img": "https://cdn.kolscan.io/profiles/215nhcAHjQQGgwpQSJQ7zR26etbjjtVdW74NLzwEgQjP.png",
       "x": "@0GAntD"
     },
     {
@@ -13,7 +13,7 @@
       "address": "GM7Hrz2bDq33ezMtL6KGidSWZXMWgZ6qBuugkb5H8NvN",
       "enable": true,
       "name": "Beaver",
-      "twProfile_img": "https://pbs.twimg.com/profile_images/1939083138203836418/ed_4Ioxm_400x400.jpg",
+      "twProfile_img": "https://cdn.kolscan.io/profiles/GM7Hrz2bDq33ezMtL6KGidSWZXMWgZ6qBuugkb5H8NvN.png",
       "x": "@beaverd"
     },
     {
@@ -22,7 +22,7 @@
       "address": "DNfuF1L62WWyW3pNakVkyGGFzVVhj4Yr52jSmdTyeBHm",
       "enable": true,
       "name": "Gake",
-      "twProfile_img": "https://pbs.twimg.com/profile_images/1943865492227469314/CbC7EvTA_400x400.jpg",
+      "twProfile_img": "https://cdn.kolscan.io/profiles/DNfuF1L62WWyW3pNakVkyGGFzVVhj4Yr52jSmdTyeBHm.png",
       "x": "@Ga__ke"
     },
     {
@@ -36,37 +36,64 @@
       "address": "AVAZvHLR2PcWpDf8BXY4rVxNHYRBytycHkcB5z5QNXYm",
       "enable": true,
       "name": "Ansem 🐂🀄️",
-      "twProfile_img": "https://pbs.twimg.com/profile_images/1909437863592132608/R14kQm8j_400x400.jpg",
+      "twProfile_img": "https://cdn.kolscan.io/profiles/AVAZvHLR2PcWpDf8BXY4rVxNHYRBytycHkcB5z5QNXYm.png",
       "x": "@blknoiz06"
     },
     {
-      "Remark": "https://dexscreener.com/solana/7TM7nzyhef5WJfsSjFFuoU2KnP3cocBcXpY1VP8jpump?maker=5CoxdsuoRHDwDPVYqPoeiJxWZ588jXhpimCRJUj8FUN1",
-      "address": "5CoxdsuoRHDwDPVYqPoeiJxWZ588jXhpimCRJUj8FUN1",
+      "address": "8MaVa9kdt3NW4Q5HyNAm1X5LbR8PQRVDc1W8NMVK88D5",
       "enable": true,
-      "name": "fascist.eth",
-      "twProfile_img": "https://pbs.twimg.com/profile_images/1836214948571041792/-JJ5CocS_400x400.jpg",
-      "x": "@ch6n9"
+      "name": "Daumen",
+      "twProfile_img": "https://cdn.kolscan.io/profiles/8MaVa9kdt3NW4Q5HyNAm1X5LbR8PQRVDc1W8NMVK88D5.png",
+      "x": "@daumenxyz"
+    },
+    {
+      "address": "96sErVjEN7LNJ6Uvj63bdRWZxNuBngj56fnT9biHLKBf",
+      "enable": true,
+      "name": "Orange",
+      "twProfile_img": "https://cdn.kolscan.io/profiles/96sErVjEN7LNJ6Uvj63bdRWZxNuBngj56fnT9biHLKBf.png",
+      "x": "@OrangeSBS"
     },
     {
       "address": "34ZEH778zL8ctkLwxxERLX5ZnUu6MuFyX9CWrs8kucMw",
       "enable": true,
       "name": "groovy.eth",
-      "twProfile_img": "https://pbs.twimg.com/profile_images/1949617221975584768/gyzquG5b_400x400.jpg",
+      "twProfile_img": "https://cdn.kolscan.io/profiles/34ZEH778zL8ctkLwxxERLX5ZnUu6MuFyX9CWrs8kucMw.png",
       "x": "@0xgroovy"
     },
     {
       "address": "7VBTpiiEjkwRbRGHJFUz6o5fWuhPFtAmy8JGhNqwHNnn",
       "enable": true,
       "name": "brox🧟‍♂️",
-      "twProfile_img": "https://pbs.twimg.com/profile_images/1887907452848365568/RJ1A81lU_400x400.jpg",
+      "twProfile_img": "https://cdn.kolscan.io/profiles/7VBTpiiEjkwRbRGHJFUz6o5fWuhPFtAmy8JGhNqwHNnn.png",
       "x": "@ohbrox"
     },
     {
       "address": "8zFZHuSRuDpuAR7J6FzwyF3vKNx4CVW3DFHJerQhc7Zd",
       "enable": true,
       "name": "pow🧲",
-      "twProfile_img": "https://pbs.twimg.com/profile_images/1944807654792019968/nHyFBLB-_400x400.jpg",
+      "twProfile_img": "https://cdn.kolscan.io/profiles/8zFZHuSRuDpuAR7J6FzwyF3vKNx4CVW3DFHJerQhc7Zd.png",
       "x": "@traderpow"
+    },
+    {
+      "address": "4Be9CvxqHW6BYiRAxW9Q3xu1ycTMWaL5z8NX4HR3ha7t",
+      "enable": true,
+      "name": "Mitch",
+      "twProfile_img": "https://cdn.kolscan.io/profiles/4Be9CvxqHW6BYiRAxW9Q3xu1ycTMWaL5z8NX4HR3ha7t.png",
+      "x": "@idrawline"
+    },
+    {
+      "address": "CA4keXLtGJWBcsWivjtMFBghQ8pFsGRWFxLrRCtirzu5",
+      "enable": true,
+      "name": "old",
+      "twProfile_img": "https://cdn.kolscan.io/profiles/CA4keXLtGJWBcsWivjtMFBghQ8pFsGRWFxLrRCtirzu5.png",
+      "x": "@old"
+    },
+    {
+      "address": "4Be9CvxqHW6BYiRAxW9Q3xu1ycTMWaL5z8NX4HR3ha7t",
+      "enable": true,
+      "name": "Mitch",
+      "twProfile_img": "https://cdn.kolscan.io/profiles/4Be9CvxqHW6BYiRAxW9Q3xu1ycTMWaL5z8NX4HR3ha7t.png",
+      "x": "@idrawline"
     }
   ]
 }

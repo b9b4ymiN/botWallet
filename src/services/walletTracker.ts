@@ -174,6 +174,7 @@ export class WalletTracker {
         try {
           const ENABLE_HOLDINGS = String(process.env.WTRACK_ENRICH_HOLDINGS || "true").toLowerCase() === "true";
           const ENABLE_PNL = String(process.env.WTRACK_ENRICH_PNL || "true").toLowerCase() === "true";
+          const USE_PROJECTED_HOLDINGS = String(process.env.WTRACK_HOLDINGS_PROJECTED || "true").toLowerCase() === "true";
 
           if (!ENABLE_HOLDINGS && !ENABLE_PNL) {
             // Skip enrichment entirely
@@ -225,35 +226,44 @@ export class WalletTracker {
             if (tradedToken.address === activity.tokenIn.address) tokenAmount = activity.qtyIn;
             if (tradedToken.address === activity.tokenOut.address) tokenAmount = activity.qtyOut;
 
-            // Current holdings on-chain
-            const holdingQty = ENABLE_HOLDINGS
-              ? await this.portfolio.getHoldingQty(
+            // Update/get local position (projected) first so we can compute snapshot immediately
+            let pos = undefined as Awaited<ReturnType<typeof this.portfolio.getPosition>>;
+            if (ENABLE_PNL) {
+              if (side === "BUY" || side === "SELL") {
+                pos = await this.portfolio.updateWithTrade({
+                  walletAddress: wallet.address,
+                  tokenAddress: tradedToken.address,
+                  symbol: tradedToken.symbol,
+                  tradeSide: side,
+                  tokenAmount,
+                  refPriceUsd: tradePriceUsd ?? priceUsd,
+                });
+              } else {
+                pos = await this.portfolio.getPosition(
                   wallet.address,
                   tradedToken.address,
                   tradedToken.symbol
-                )
-              : 0;
-
-            // Update local position estimates for BUY/SELL (skip SWAP to avoid ambiguity)
-            if (ENABLE_PNL && (side === "BUY" || side === "SELL")) {
-              await this.portfolio.updateWithTrade({
-                walletAddress: wallet.address,
-                tokenAddress: tradedToken.address,
-                symbol: tradedToken.symbol,
-                tradeSide: side,
-                tokenAmount,
-                refPriceUsd: tradePriceUsd ?? priceUsd,
-              });
+                );
+              }
             }
 
-            const pos = ENABLE_PNL
-              ? await this.portfolio.getPosition(
+            // Prefer projected holdings from local position to avoid RPC lag; fallback to on-chain if disabled/unavailable
+            let holdingQty: number | undefined = undefined;
+            if (ENABLE_HOLDINGS) {
+              if (USE_PROJECTED_HOLDINGS && pos) {
+                holdingQty = pos.qty;
+              } else {
+                holdingQty = await this.portfolio.getHoldingQty(
                   wallet.address,
                   tradedToken.address,
                   tradedToken.symbol
-                )
-              : undefined;
-            const snapshot = this.portfolio.computeSnapshot(pos, holdingQty, priceUsd);
+                );
+              }
+            } else {
+              holdingQty = 0;
+            }
+
+            const snapshot = this.portfolio.computeSnapshot(pos, holdingQty ?? 0, priceUsd);
 
             // Attach to activity (optional fields supported by notifier)
             if (ENABLE_HOLDINGS) (activity as any).holdingQty = snapshot.holdingQty;
